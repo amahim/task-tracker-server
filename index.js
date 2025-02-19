@@ -2,11 +2,11 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const app = express();
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 6000;
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 
-
+   
 
 // middleware
 app.use(cors());
@@ -29,6 +29,7 @@ async function run() {
     await client.connect();
 
     const usersCollection = client.db("taskTracker").collection("users");
+    const tasksCollection = client.db("taskTracker").collection("tasks");
 
     // !User related APIs--------------------------------------------
 
@@ -46,6 +47,36 @@ async function run() {
     app.get("/users", async (req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result);
+    });
+
+    // ! Task related APIs --------------------------------------------
+
+    // POST: Add a new task
+    app.post("/tasks", async (req, res) => {
+      const task = req.body;
+      try {
+        const result = await tasksCollection.insertOne(task);
+        console.log(result); // Log the result to debug
+        res.send(result);
+      } catch (error) {
+        console.error("Error inserting task:", error);
+        res.status(500).send({ error: "Failed to add task" });
+      }
+    });
+    
+
+    // GET: Retrieve all tasks
+    app.get("/tasks", async (req, res) => {
+      const result = await tasksCollection.find().toArray();
+      res.send(result);
+    });
+
+    // GET: Retrieve task by ID
+    app.get("/tasks/:id", async (req, res) => {
+      const taskId = req.params.id;
+      const task = await tasksCollection.findOne({ _id: new ObjectId(taskId) });
+        res.send(task);
+      
     });
 
 
