@@ -2,11 +2,8 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const app = express();
-const port = process.env.PORT || 6000;
+const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-
-
-   
 
 // middleware
 app.use(cors());
@@ -20,7 +17,7 @@ const client = new MongoClient(uri, {
     version: ServerApiVersion.v1,
     strict: true,
     deprecationErrors: true,
-  }
+  },
 });
 
 async function run() {
@@ -63,7 +60,6 @@ async function run() {
         res.status(500).send({ error: "Failed to add task" });
       }
     });
-    
 
     // GET: Retrieve all tasks
     app.get("/tasks", async (req, res) => {
@@ -75,14 +71,42 @@ async function run() {
     app.get("/tasks/:id", async (req, res) => {
       const taskId = req.params.id;
       const task = await tasksCollection.findOne({ _id: new ObjectId(taskId) });
-        res.send(task);
-      
+      res.send(task);
     });
 
+    // delete taskjs
+    app.delete("/tasks/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await tasksCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    app.put('/tasks/:id', async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const options = { upsert: false };  // Don't create a new task if it doesn't exist
+      const updatedTask = req.body;
+  
+      const task = {
+          $set: {
+              title: updatedTask.title,
+              description: updatedTask.description,
+              // Add other fields you want to update here
+          },
+      };
+  
+  
+          const result = await tasksCollection.updateOne(filter, task, options);
+  
+         res.send(result)
+  });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    console.log(
+      "Pinged your deployment. You successfully connected to MongoDB!"
+    );
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
@@ -90,10 +114,9 @@ async function run() {
 }
 run().catch(console.dir);
 
-
 app.get("/", (req, res) => {
   res.send("task-tracker server is running");
-});  // Add this closing bracket
+}); // Add this closing bracket
 app.listen(port, () => {
   console.log(`task-tracker server is running on port ${port}`);
 });
