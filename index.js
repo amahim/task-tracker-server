@@ -48,12 +48,44 @@ async function run() {
 
     // ! Task related APIs --------------------------------------------
 
+    // Reorder tasks endpoint (must be before /:id route)
+    app.put('/tasks/reorder', async (req, res) => {
+      try {
+        const { tasks } = req.body;
+        
+        if (!tasks || !Array.isArray(tasks)) {
+          return res.status(400).json({ message: 'Invalid tasks data' });
+        }
+
+        const updatePromises = tasks.map(task => {
+          if (!task.id) return null;
+          return tasksCollection.updateOne(
+            { _id: new ObjectId(task.id) },
+            { $set: { order: task.order } }
+          );
+        }).filter(Boolean);
+
+        await Promise.all(updatePromises);
+        res.status(200).json({ message: 'Tasks reordered successfully' });
+      } catch (error) {
+        console.error('Error reordering tasks:', error);
+        res.status(500).json({ message: 'Failed to reorder tasks' });
+      }
+    });
+
     // POST: Add a new task
     app.post("/tasks", async (req, res) => {
-      const task = req.body;
       try {
+        // Get the highest order number
+        const lastTask = await tasksCollection.findOne({}, { sort: { order: -1 } });
+        const nextOrder = lastTask ? (lastTask.order || 0) + 1 : 0;
+
+        const task = {
+          ...req.body,
+          order: nextOrder
+        };
+
         const result = await tasksCollection.insertOne(task);
-        console.log(result); // Log the result to debug
         res.send(result);
       } catch (error) {
         console.error("Error inserting task:", error);
@@ -61,10 +93,15 @@ async function run() {
       }
     });
 
-    // GET: Retrieve all tasks
+    // GET: Retrieve all tasks (sorted by order)
     app.get("/tasks", async (req, res) => {
-      const result = await tasksCollection.find().toArray();
-      res.send(result);
+      try {
+        const result = await tasksCollection.find().sort({ order: 1 }).toArray();
+        res.send(result);
+      } catch (error) {
+        console.error('Error fetching tasks:', error);
+        res.status(500).json({ message: 'Failed to fetch tasks' });
+      }
     });
 
     // GET: Retrieve task by ID
@@ -74,7 +111,7 @@ async function run() {
       res.send(task);
     });
 
-    // delete taskjs
+    // delete tasks
     app.delete("/tasks/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -82,31 +119,27 @@ async function run() {
       res.send(result);
     });
 
-    app.put('/tasks/:id', async (req, res) => {
+    // Update task
+    app.put('/tasks/:id', async (req, res) => {git 
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
-      const options = { upsert: false };  // Don't create a new task if it doesn't exist
+      const options = { upsert: false };
       const updatedTask = req.body;
   
       const task = {
-          $set: {
-              title: updatedTask.title,
-              description: updatedTask.description,
-              // Add other fields you want to update here
-          },
+        $set: {
+          title: updatedTask.title,
+          description: updatedTask.description,
+        },
       };
   
-  
-          const result = await tasksCollection.updateOne(filter, task, options);
-  
-         res.send(result)
-  });
+      const result = await tasksCollection.updateOne(filter, task, options);
+      res.send(result);
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
@@ -116,7 +149,8 @@ run().catch(console.dir);
 
 app.get("/", (req, res) => {
   res.send("task-tracker server is running");
-}); // Add this closing bracket
+});
+
 app.listen(port, () => {
   console.log(`task-tracker server is running on port ${port}`);
 });
